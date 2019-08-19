@@ -35,7 +35,7 @@ TODO:
 - set the return code the rc value in the JSON string
 
 Example usage:
-
+```
 $ go run go-vbmc.go list
 json reply( 55 ):  [{"rc": 0, "header": ["Domain name", "Status", "Address", "Port"], "rows": []}]
 
@@ -65,3 +65,4 @@ Retrun string:  [{"rc": 0, "msg": []}]
 
 $ go run go-vbmc.go list
 json reply( 55 ):  [{"rc": 0, "header": ["Domain name", "Status", "Address", "Port"], "rows": []}]
+```
