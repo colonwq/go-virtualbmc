@@ -17,6 +17,8 @@ type short_struct struct {
 
 type add_struct struct {
 	Address               string `json:"address"`
+	Namespace             string `json:"namespace"`
+	Name                  string `json:"name"`
 	Domain_name           string `json:"domain_name"`
 	Libvirt_sasl_password string `json:"libvirt_sasl_password"`
 	Libvirt_sasl_username string `json:"libvirt_sasl_username"`
@@ -76,6 +78,8 @@ func main() {
 
 	addCmd                   := flag.NewFlagSet("add", flag.ExitOnError)
 	AddAddress               := addCmd.String("address","::","Bind address" )
+	AddNamespace             := addCmd.String("namespace","default","k8 Namespace")
+	AddName                  := addCmd.String("name","default","k8 VM/VMI Name")
 	AddLibvirt_sasl_password := addCmd.String("libvirt_sasl_password","","Libvirt SASL Password" )
 	AddLibvirt_sasl_username := addCmd.String("libvirt_sasl_username","","Libvirt SASL Username" )
 	AddLibvirt_uri           := addCmd.String("libvirt_uri", "qemu:///system","Libvirt URI connection string" )
@@ -118,6 +122,8 @@ func main() {
 		}
 		add(addCmd.Arg(0),
 			*AddAddress,
+			*AddNamespace,
+			*AddName,
 			*AddLibvirt_sasl_username,
 			*AddLibvirt_sasl_password,
 			*AddLibvirt_uri,
@@ -125,6 +131,10 @@ func main() {
 			*AddPassword,
 			*AddPort)
 	case "show":
+		if len(os.Args) < 3 {
+			fmt.Println("no host given")
+			os.Exit(2)
+		}
 		err := showCmd.Parse(os.Args[2:])
 		if err != nil {
 			fmt.Println("Error parsing the command line: ", err )
@@ -140,12 +150,24 @@ func main() {
 			*ShowQuote_mode,
 			*ShowSort_columns)
 	case "start":
+		if len(os.Args) != 3 {
+			fmt.Println("no host given")
+			os.Exit(2)
+		}
 		return_string := simple_command("start", os.Args[2])
 		fmt.Println("Retrun string: " , return_string)
 	case "stop":
+		if len(os.Args) != 3 {
+			fmt.Println("no host given")
+			os.Exit(2)
+		}
 		return_string := simple_command("stop", os.Args[2])
 		fmt.Println("Retrun string: " , return_string)
 	case "delete":
+		if len(os.Args) != 3 {
+			fmt.Println("no host given")
+			os.Exit(2)
+		}
 		return_string := simple_command("delete", os.Args[2])
 		fmt.Println("Retrun string: " , return_string)
 	default:
@@ -156,6 +178,8 @@ func main() {
 
 func add(host string,
 			Address string,
+			Namespace string,
+			Name string,
 			Libvirt_sasl_username string,
 			Libvirt_sasl_password string,
 			Libvirt_uri string,
@@ -173,6 +197,8 @@ func add(host string,
 		Libvirt_sasl_username: Libvirt_sasl_username,
 		Libvirt_sasl_password: Libvirt_sasl_password,
 		Libvirt_uri: Libvirt_uri,
+		Namespace: Namespace,
+		Name: Name,
 	}
 
 	add_cmd_json, json_err := json.Marshal(add_cmd)
