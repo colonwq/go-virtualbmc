@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"text/tabwriter"
 	"time"
 	zmq "github.com/pebbe/zmq4"
 )
@@ -34,12 +35,25 @@ const (
 	//MAX_RETRIES     = 3 //  Before we abandon
 )
 
-func send_recieve_message(outmessage []byte) ([]string, int, error) {
+type Response_msg struct {
+    Rc   int      `json:"rc"`
+    Msg []string  `json:"msg"`
+}
+
+type Response struct {
+    Rc   int      `json:"rc"`
+    Header []string `json:"header"`
+    Rows [][]string `json:"rows"`
+}
+
+func send_recieve_message_string(outmessage []byte) ([]string, int, error) {
 	var size int
 	//creat a request client
 	client, _ := zmq.NewSocket(zmq.REQ)
 
-	err := client.Connect("tcp://127.0.0.1:50891")
+	err := client.Connect("tcp://192.168.39.17:50891")
+	//err := client.Connect("tcp://127.0.0.1:50891")
+	//err := client.Connect("tcp://192.168.39.15:50891")
 
 	if err != nil {
 		fmt.Println("Connection error: ", err)
@@ -57,6 +71,45 @@ func send_recieve_message(outmessage []byte) ([]string, int, error) {
 	reply := []string{}
 	if len(polled) == 1 {
 		reply, err = client.RecvMessage(0)
+		//reply, err = client.RecvBytes(0)
+	}
+	//fmt.Println("Reply: ", reply)
+
+	err = client.Close()
+
+	if err != nil {
+		fmt.Println("Close error: ", err)
+	}
+
+	return reply, size, err
+}
+
+func send_recieve_message(outmessage []byte) ([]byte, int, error) {
+	var size int
+	//creat a request client
+	client, _ := zmq.NewSocket(zmq.REQ)
+
+	err := client.Connect("tcp://192.168.39.17:50891")
+	//err := client.Connect("tcp://127.0.0.1:50891")
+	//err := client.Connect("tcp://192.168.39.15:50891")
+
+	if err != nil {
+		fmt.Println("Connection error: ", err)
+	}
+
+	size, err = client.SendMessage( outmessage )
+
+	if err != nil {
+		fmt.Println("Send error: ", err)
+	}
+
+	poller := zmq.NewPoller()
+	poller.Add(client, zmq.POLLIN)
+	polled, err := poller.Poll( REQUEST_TIMEOUT )
+	reply := []byte{}
+	if len(polled) == 1 {
+		//reply, err = client.RecvMessage(0)
+		reply, err = client.RecvBytes(0)
 	}
 	//fmt.Println("Reply: ", reply)
 
@@ -71,6 +124,8 @@ func send_recieve_message(outmessage []byte) ([]string, int, error) {
 
 func main() {
 
+	var rc int = 0
+	var msg string
 	if len(os.Args) < 2 {
 		fmt.Println( "lots of nothing to do" )
 		os.Exit(1)
@@ -105,7 +160,7 @@ func main() {
 			fmt.Println("Error parsing the command line: ", err )
 			os.Exit(2)
 		}
-		list(
+		rc, msg = list(
 			*ShowColumns,
 			*ShowFit_width,
 			*ShowFormatter,
@@ -120,7 +175,7 @@ func main() {
 			fmt.Println("Error parsing the command line: ", err )
 			os.Exit(2)
 		}
-		add(addCmd.Arg(0),
+		rc, msg = add(addCmd.Arg(0),
 			*AddAddress,
 			*AddNamespace,
 			*AddName,
@@ -140,7 +195,7 @@ func main() {
 			fmt.Println("Error parsing the command line: ", err )
 			os.Exit(2)
 		}
-		show(showCmd.Arg(0),
+		rc, msg = show(showCmd.Arg(0),
 			*ShowColumns,
 			*ShowFit_width,
 			*ShowFormatter,
@@ -154,26 +209,28 @@ func main() {
 			fmt.Println("no host given")
 			os.Exit(2)
 		}
-		return_string := simple_command("start", os.Args[2])
-		fmt.Println("Retrun string: " , return_string)
+		rc, msg = simple_command("start", os.Args[2])
 	case "stop":
 		if len(os.Args) != 3 {
 			fmt.Println("no host given")
 			os.Exit(2)
 		}
-		return_string := simple_command("stop", os.Args[2])
-		fmt.Println("Retrun string: " , return_string)
+		rc, msg = simple_command("stop", os.Args[2])
 	case "delete":
 		if len(os.Args) != 3 {
 			fmt.Println("no host given")
 			os.Exit(2)
 		}
-		return_string := simple_command("delete", os.Args[2])
-		fmt.Println("Retrun string: " , return_string)
+		rc, msg = simple_command("delete", os.Args[2])
 	default:
-		fmt.Println("Nothing to do. Move along")
-		os.Exit(1)
+		msg = "Nothing to do. Move along"
+		rc = 1
 	}
+
+	if rc != 0 {
+		fmt.Println("Error: ", msg )
+	}
+	os.Exit(rc)
 }
 
 func add(host string,
@@ -185,7 +242,7 @@ func add(host string,
 			Libvirt_uri string,
 			Username string,
 			Password string,
-			Port uint) {
+			Port uint) (int, string){
 
 	add_cmd := &add_struct{
 		Command: "add",
@@ -206,14 +263,21 @@ func add(host string,
 	if json_err != nil {
 		fmt.Println("json marshal error: ", json_err)
 	}
-	//fmt.Println("json cmd: ", string(add_cmd_json))
 
-	inmessage, size, err := send_recieve_message( add_cmd_json )
+	inmessage, _, err := send_recieve_message( add_cmd_json )
 	if err != nil {
 		fmt.Println( "Send/recieve error: ", err )
 	}
 
-	fmt.Println("json reply(", size, "): " , inmessage, "." )
+	res := Response_msg{}
+	bytes := []byte(inmessage)
+	json.Unmarshal(bytes , &res )
+
+	if res.Rc == 0 {
+		return res.Rc, "Ok"
+	} else {
+		return res.Rc, res.Msg[0]
+	}
 }
 
 func show(host string,
@@ -224,56 +288,76 @@ func show(host string,
 			Noindent bool,
 			Print_empty bool,
 			Quote_mode string,
-			Sort_columns string) {
+			Sort_columns string) (int, string) {
+
+	var msg [1]string
 	show_cmd := &short_struct{
 		Command:     "show",
 		Domain_name: host,
 	}
-	//these are needed for only the printing aspects. 
-	//Columns:     Columns,
-	//Sort_columns:     Sort_columns,
-	//Fit_width:   Fit_width,
-	//Formatter:   Formatter,
-	//Max_width:   Max_width,
-	//Noindent:    Noindent,
-	//Print_empty: Print_empty,
-	//Quote_mode:  Quote_mode,
 
 	show_cmd_json, json_err := json.Marshal(show_cmd)
 	if json_err != nil {
 		fmt.Println("json marshal error: ", json_err)
 	}
-	//fmt.Println("json cmd: ", string(show_cmd_json))
 
-	inmessage, size, err := send_recieve_message( show_cmd_json )
+	inmessage, _, err := send_recieve_message( show_cmd_json )
 	if err != nil {
 		fmt.Println( "Send/recieve error: ", err )
 	}
 
-	fmt.Println("json reply(", size, "): " , inmessage )
+	res := Response{}
+	bytes := []byte(inmessage)
+	json.Unmarshal(bytes , &res )
+
+	if res.Rc == 0 {
+		w := new(tabwriter.Writer)
+		w.Init(os.Stdout, 8, 8, 2, ' ', tabwriter.Debug)
+
+		fmt.Fprintf( w, "%s\t%s\n", res.Header[0], res.Header[1] )
+
+		for i := 0; i < len(res.Rows); i++ {
+			fmt.Fprintf( w, "%s\t%s\n", res.Rows[i][0], res.Rows[i][1] )
+		}
+
+		w.Flush()
+		msg[0] = "Ok"
+
+	} else {
+		res := Response_msg{}
+		bytes := []byte(inmessage)
+		json.Unmarshal(bytes , &res )
+		msg[0] = res.Msg[0]
+	}
+
+	return res.Rc, msg[0]
 }
 
-func simple_command(command string, host string) ([]string) {
+func simple_command(command string, host string) (int, string) {
 	start_cmd := &short_struct{
 		Command: command,
 	}
 	start_cmd.Domain_names = append(start_cmd.Domain_names, host )
-	//fmt.Println("simple command: " , start_cmd.Command )
 
 	start_cmd_json, json_err := json.Marshal(start_cmd)
 	if json_err != nil {
 		fmt.Println("json marshal error: ", json_err)
 	}
-	//fmt.Println("json cmd: ", string(start_cmd_json))
 
 	inmessage, _, err := send_recieve_message( start_cmd_json )
 	if err != nil {
 		fmt.Println( "Send/recieve error: ", err )
 	}
 
-	//fmt.Println("json reply(", size, "): " , inmessage )
+	res := Response_msg{}
+	bytes := []byte(inmessage)
+	json.Unmarshal(bytes , &res )
 
-	return inmessage ;
+	if res.Rc == 0 {
+		return res.Rc, "Ok"
+	} else {
+		return res.Rc, res.Msg[0]
+	}
 }
 
 func list(
@@ -284,33 +368,45 @@ func list(
 			Noindent bool,
 			Print_empty bool,
 			Quote_mode string,
-			Sort_columns string) {
+			Sort_columns string) (int, string){
+	var msg [1]string
 
 	list_cmd := &short_struct{
 		Command:     "list",
 	}
-	//these are only needed for the printing aspect
-	//Columns:     []string{},
-	//Sort_columns:     []string{},
-	//Fit_width:   false,
-	//Formatter:   "table",
-	//Max_width:   0,
-	//Noindent:    false,
-	//Print_empty: false,
-	//Quote_mode:  "nonnumeric",
-
 
 	list_cmd_json, json_err := json.Marshal(list_cmd)
 	if json_err != nil {
 		fmt.Println("json marshal error: ", json_err)
 	}
-	//fmt.Println("json cmd: ", string(list_cmd_json))
 
-	inmessage, size, err := send_recieve_message( list_cmd_json )
+	inmessage, _, err := send_recieve_message( list_cmd_json )
 	if err != nil {
 		fmt.Println( "Send/recieve error: ", err )
 	}
 
-	fmt.Println("json reply(", size, "): " , inmessage )
+	res := Response{}
+	bytes := []byte(inmessage)
+	json.Unmarshal(bytes , &res )
 
+	if res.Rc == 0 {
+		w := new(tabwriter.Writer)
+		w.Init(os.Stdout, 8, 8, 2, ' ', tabwriter.Debug)
+
+		fmt.Fprintf( w, "%s\t%s\t%s\n", res.Header[0], res.Header[1], res.Header[2] )
+
+		for i := 0; i < len(res.Rows); i++ {
+			fmt.Fprintf( w, "%s\t%s\t%s\n", res.Rows[i][0], res.Rows[i][1], res.Rows[i][2] )
+		}
+
+		w.Flush()
+
+		return res.Rc, "Ok"
+	} else {
+		res := Response_msg{}
+		bytes := []byte(inmessage)
+		json.Unmarshal(bytes , &res )
+		msg[0] = res.Msg[0]
+		return res.Rc, res.Msg[0]
+	}
 }
