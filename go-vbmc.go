@@ -51,9 +51,7 @@ func send_recieve_message_string(outmessage []byte) ([]string, int, error) {
 	//creat a request client
 	client, _ := zmq.NewSocket(zmq.REQ)
 
-	err := client.Connect("tcp://192.168.39.17:50891")
-	//err := client.Connect("tcp://127.0.0.1:50891")
-	//err := client.Connect("tcp://192.168.39.15:50891")
+	err := client.Connect("tcp://127.0.0.1:50891")
 
 	if err != nil {
 		fmt.Println("Connection error: ", err)
@@ -71,9 +69,7 @@ func send_recieve_message_string(outmessage []byte) ([]string, int, error) {
 	reply := []string{}
 	if len(polled) == 1 {
 		reply, err = client.RecvMessage(0)
-		//reply, err = client.RecvBytes(0)
 	}
-	//fmt.Println("Reply: ", reply)
 
 	err = client.Close()
 
@@ -91,7 +87,6 @@ func send_recieve_message(outmessage []byte) ([]byte, int, error) {
 
 	err := client.Connect("tcp://192.168.39.17:50891")
 	//err := client.Connect("tcp://127.0.0.1:50891")
-	//err := client.Connect("tcp://192.168.39.15:50891")
 
 	if err != nil {
 		fmt.Println("Connection error: ", err)
@@ -108,10 +103,8 @@ func send_recieve_message(outmessage []byte) ([]byte, int, error) {
 	polled, err := poller.Poll( REQUEST_TIMEOUT )
 	reply := []byte{}
 	if len(polled) == 1 {
-		//reply, err = client.RecvMessage(0)
 		reply, err = client.RecvBytes(0)
 	}
-	//fmt.Println("Reply: ", reply)
 
 	err = client.Close()
 
@@ -389,17 +382,20 @@ func list(
 	bytes := []byte(inmessage)
 	json.Unmarshal(bytes , &res )
 
+	fmt.Println( res )
 	if res.Rc == 0 {
-		w := new(tabwriter.Writer)
-		w.Init(os.Stdout, 8, 8, 2, ' ', tabwriter.Debug)
+		if len(res.Rows) > 0 {
+			w := new(tabwriter.Writer)
+			w.Init(os.Stdout, 8, 8, 2, ' ', tabwriter.Debug)
 
-		fmt.Fprintf( w, "%s\t%s\t%s\n", res.Header[0], res.Header[1], res.Header[2] )
+			fmt.Fprintf( w, "%s\t%s\t%s\n", res.Header[0], res.Header[1], res.Header[2] )
 
-		for i := 0; i < len(res.Rows); i++ {
-			fmt.Fprintf( w, "%s\t%s\t%s\n", res.Rows[i][0], res.Rows[i][1], res.Rows[i][2] )
+			for i := 0; i < len(res.Rows); i++ {
+				fmt.Fprintf( w, "%s\t%s\t%s\n", res.Rows[i][0], res.Rows[i][1], res.Rows[i][2] )
+			}
+
+			w.Flush()
 		}
-
-		w.Flush()
 
 		return res.Rc, "Ok"
 	} else {
