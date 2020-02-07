@@ -1,0 +1,2 @@
+#!/bin/bash
+go run /root/git/go-virtualbmc/go-vbmc.go add $*
