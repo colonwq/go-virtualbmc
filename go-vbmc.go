@@ -85,8 +85,7 @@ func send_recieve_message(outmessage []byte) ([]byte, int, error) {
 	//creat a request client
 	client, _ := zmq.NewSocket(zmq.REQ)
 
-	err := client.Connect("tcp://192.168.39.17:50891")
-	//err := client.Connect("tcp://127.0.0.1:50891")
+	err := client.Connect("tcp://127.0.0.1:50891")
 
 	if err != nil {
 		fmt.Println("Connection error: ", err)
