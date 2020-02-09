@@ -46,43 +46,8 @@ type Response struct {
     Rows [][]string `json:"rows"`
 }
 
-func send_recieve_message_string(outmessage []byte) ([]string, int, error) {
-	var size int
-	//creat a request client
-	client, _ := zmq.NewSocket(zmq.REQ)
-
-	err := client.Connect("tcp://127.0.0.1:50891")
-
-	if err != nil {
-		fmt.Println("Connection error: ", err)
-	}
-
-	size, err = client.SendMessage( outmessage )
-
-	if err != nil {
-		fmt.Println("Send error: ", err)
-	}
-
-	poller := zmq.NewPoller()
-	poller.Add(client, zmq.POLLIN)
-	polled, err := poller.Poll( REQUEST_TIMEOUT )
-	reply := []string{}
-	if len(polled) == 1 {
-		reply, err = client.RecvMessage(0)
-	}
-
-	err = client.Close()
-
-	if err != nil {
-		fmt.Println("Close error: ", err)
-	}
-
-	return reply, size, err
-}
-
 func send_recieve_message(outmessage []byte) ([]byte, int, error) {
 	var size int
-	//creat a request client
 	client, _ := zmq.NewSocket(zmq.REQ)
 
 	err := client.Connect("tcp://127.0.0.1:50891")
@@ -381,7 +346,6 @@ func list(
 	bytes := []byte(inmessage)
 	json.Unmarshal(bytes , &res )
 
-	fmt.Println( res )
 	if res.Rc == 0 {
 		if len(res.Rows) > 0 {
 			w := new(tabwriter.Writer)
